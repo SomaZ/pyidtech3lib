@@ -521,7 +521,6 @@ class ID3Model:
                 self.add_bsp_patch(bsp, face, import_settings)
 
         self.uv_layers["UVMap"].make_unindexed_list()
-        self.vertex_normals.make_unindexed_list()
 
         for i in range(bsp_model.n_brushes):
             brush_id = first_brush + i
@@ -568,7 +567,7 @@ class ID3Model:
                 self.index_mapping[index] = self.current_index
                 self.current_index += 1
                 self.positions.add_indexed(point)
-                self.vertex_normals.add_unindexed((0.0, 0.0, 0.0))
+                self.vertex_normals.add_indexed((0.0, 0.0, 0.0))
                 self.uv_layers["UVMap"].add_unindexed(uv)
 
             for face, material in zip(faces, mats):
