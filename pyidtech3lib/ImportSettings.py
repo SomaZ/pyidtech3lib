@@ -20,6 +20,13 @@ class Surface_Type(IntFlag):
     FLARE = 8
     FAKK_TERRAIN = 16
     BRUSH = 32
+    ALL = (BRUSH |
+           PLANAR |
+           PATCH |
+           TRISOUP |
+           FAKK_TERRAIN |
+           FLARE
+           )
 
     @classmethod
     def bsp_value(cls, value):
