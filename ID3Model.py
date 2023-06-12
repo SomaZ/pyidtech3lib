@@ -451,11 +451,18 @@ class ID3Model:
             # end of row?
             if ((patch_face_index+1) % (width+1) == 0):
                 continue
-            bsp_indices = [
-                bsp_index_list[patch_face_index + 1],
-                bsp_index_list[patch_face_index + width + 2],
-                bsp_index_list[patch_face_index + width + 1],
-                bsp_index_list[patch_face_index]]
+            if import_settings.front_culling:
+                bsp_indices = [
+                    bsp_index_list[patch_face_index + 1],
+                    bsp_index_list[patch_face_index ],
+                    bsp_index_list[patch_face_index + width + 1],
+                    bsp_index_list[patch_face_index + width + 2]]
+            else:
+                bsp_indices = [
+                    bsp_index_list[patch_face_index + 1],
+                    bsp_index_list[patch_face_index + width + 2],
+                    bsp_index_list[patch_face_index + width + 1],
+                    bsp_index_list[patch_face_index]]
 
             self.add_bsp_vertex_data(bsp, bsp_indices, face.lm_indexes)
 
@@ -572,9 +579,12 @@ class ID3Model:
 
             for face, material in zip(faces, mats):
                 # add vertices to model
-                self.indices.append(
-                    [self.index_mapping[indices[index]] for index in face])
-
+                if import_settings.front_culling:
+                    self.indices.append(
+                        [self.index_mapping[indices[index]] for index in face[::-1]])
+                else:
+                    self.indices.append(
+                        [self.index_mapping[indices[index]] for index in face])
                 if material not in self.material_names:
                     self.material_names.append(material)
 
