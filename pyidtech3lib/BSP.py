@@ -290,6 +290,30 @@ class BSP_READER:
                 models.append(model)
 
         return models
+    
+    def get_bsp_fogs(self) -> list():
+        models = []
+        for i in range(len(self.lumps["fogs"])):
+            current_fog = self.lumps["fogs"][i]
+            fog_name = current_fog.name.decode("latin-1")
+            model = MODEL("{}_{}".format(fog_name, i))
+            model.init_bsp_brush_data(self)
+
+            # global fog
+            if current_fog.brush == -1:
+                world = self.lumps["models"][0]
+                model.add_bsp_bounds_mesh(
+                    self, world.mins,
+                    world.maxs,
+                    fog_name)
+            else:
+                model.add_bsp_brush(self, current_fog.brush, self.import_settings)
+
+            for i in range(len(model.material_names)):
+                model.material_names[i] = model.material_names[i] + ".fog"
+            if model.current_index > 0:
+                models.append(model)
+        return models
 
     def pack_lightmap(
             self,

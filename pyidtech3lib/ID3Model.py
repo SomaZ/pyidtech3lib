@@ -535,7 +535,7 @@ class ID3Model:
                                    model_indices,
                                    face,
                                    force_nodraw)
-            
+
     def add_bsp_brush(self, bsp, brush_id, import_settings):
         bsp_brush = bsp.lumps["brushes"][brush_id]
         brush_shader = ""
@@ -607,7 +607,7 @@ class ID3Model:
             self.face_smooth.append(False)
             self.material_id.append(
                 self.material_names.index(material))
-            
+
     def add_bsp_bounds_mesh(self, bsp, mins, maxs, material):
 
         min_max_planes = [
