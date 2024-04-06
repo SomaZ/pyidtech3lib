@@ -178,7 +178,7 @@ class BSP_READER:
         # check if we should pack lightmap tcs or not,
         # packing lightmap tcs is not supported for shader
         # based external lightmaps
-        num_internal_lm_ids = 0
+        num_internal_lm_ids = -1
         for face in self.lumps["surfaces"]:
             if self.lightmaps > 1:
                 current_max = max(face.lm_indexes)
@@ -189,6 +189,10 @@ class BSP_READER:
             num_internal_lm_ids = max(current_max, num_internal_lm_ids)
         self.num_internal_lm_ids = num_internal_lm_ids
         self.lm_packable = num_internal_lm_ids > 0
+
+        if num_internal_lm_ids == 0 and len(self.external_lm_files) == 2:
+            self.deluxemapping = True
+            return
 
         # check if the map utilizes deluxemapping
         if num_internal_lm_ids <= 0:
