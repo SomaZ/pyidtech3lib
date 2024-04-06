@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pyidtech3lib',
-    version='0.0.1',
+    version='0.0.2',
     author='SomaZ',
     url='https://github.com/SomaZ/pyidtech3lib',
     license='MIT',
