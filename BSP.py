@@ -7,6 +7,8 @@ from pyidtech3lib.FBSP import BSP_INFO as FBSP
 from pyidtech3lib.ID3Model import ID3Model as MODEL
 from pyidtech3lib.ID3Object import ID3Object as OBJECT
 from pyidtech3lib.ID3Image import ID3Image as IMAGE
+from pyidtech3lib.ID3Shader import get_material_dicts
+from pyidtech3lib.ImportSettings import Vert_lit_handling
 from math import floor, ceil
 from numpy import array, dot, sin, cos, sqrt, pi
 from struct import unpack
@@ -124,6 +126,7 @@ class BSP_READER:
         self.lerp_vertices = bsp_info.lerp_vertices
         self.lightmap_lumps = bsp_info.lightmap_lumps
         self.compute_lightmap_info(VFS)
+        self.find_shader_based_external_lightmaps(VFS)
 
     def set_entity_lump(self, entity_text):
         bsp_info = self.MAGIC_MAPPING[self.header.magic_nr]
@@ -238,6 +241,21 @@ class BSP_READER:
         if self.deluxemapping:
             packed_lightmap_size[1] = packed_lightmap_size[1] // 2
         return packed_lightmap_size
+    
+    def find_shader_based_external_lightmaps(self, VFS):
+        materials = []
+        material_id_matching = {}
+        for shader_id, shader in enumerate(self.lumps["shaders"]):
+            shader_name = shader.name.decode(encoding="latin-1").lower()
+            material_id_matching[shader_name] = shader_id
+            materials.append(shader_name)
+        material_dicts = get_material_dicts(VFS, self.import_settings, materials)
+        self.lightmap_tc_shaders = []
+        for material in material_dicts:
+            attributes, stages = material_dicts[material]
+            for stage in stages:
+                if "tcgen" in stage and stage["tcgen"] == "lightmap":
+                    self.lightmap_tc_shaders.append(material_id_matching[material])
 
     def get_bsp_entity_objects(self) -> dict:
         return OBJECT.get_entity_objects_from_bsp(self)
@@ -252,6 +270,10 @@ class BSP_READER:
         if model.current_index > 0:
             if pack_lightmap_uvs:
                 model.pack_lightmap_uvs(self)
+            if self.import_settings.vert_lit_handling == Vert_lit_handling.PRIMITIVE_PACK:
+                model.pack_vertmap_uvs(self, self.import_settings)
+            elif self.import_settings.vert_lit_handling == Vert_lit_handling.UV_MAP:
+                model.copy_vertmap_uvs_from_diffuse(self)
             return model
 
         model = MODEL("*"+str(model_id))

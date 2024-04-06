@@ -34,6 +34,45 @@ def clamp_shift_tc(tc, min_tc, max_tc, u_shift, v_shift):
     return (u, v)
 
 
+def unwrap_vert_map(vert_id, vertmap_size, current_id):
+    id = int(floor(current_id/3.0))
+    even = id % 2 == 0
+    id += floor(id / 2)
+    current_x = id % (vertmap_size[0] - 1)
+    current_y = 2 * floor(id / (vertmap_size[0] - 1))
+    
+    eps_u = 0.005
+    if even:
+        eps_small = 0.495
+        eps_big = 1.505
+        if vert_id == 0:
+            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+        elif vert_id == 1:
+            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + eps_small) / vertmap_size[1])
+        elif vert_id == 2:
+            return ((current_x + eps_big + eps_u) / vertmap_size[0], (current_y + eps_small) / vertmap_size[1])
+        #special case for patch surfaces
+        elif vert_id == 3:
+            return ((current_x + eps_big + eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+        else:
+            return (0.0, 0.0)
+    else:
+        eps_small = 0.505
+        eps_big = 1.505
+        current_x += 1
+        if vert_id == 0:
+            return ((current_x - eps_small - eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+        elif vert_id == 1:
+            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+        elif vert_id == 2:
+            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + 0.49) / vertmap_size[1])
+        #special case for patch surfaces
+        elif vert_id == 3:
+            return ((current_x - eps_small - eps_u) / vertmap_size[0], (current_y + 0.49) / vertmap_size[1])
+        else:
+            return (0.0, 0.0)
+
+
 def pack_lm_tc(tc,
                lightmap_id,
                lightmap_size,
@@ -142,6 +181,7 @@ class ID3Model:
 
         self.current_index = 0
         self.index_mapping = [-2 for i in range(len(bsp.lumps["drawverts"]))]
+        self.ext_lm_tc = []
 
         self.num_bsp_vertices = len(bsp.lumps["drawverts"])
         self.vertex_lightmap_id = self.VertexAttribute(self.indices)
@@ -157,6 +197,8 @@ class ID3Model:
         self.current_index = 0
         self.index_mapping = [-2 for i in range(len(bsp.lumps["drawverts"]))]
         self.num_bsp_vertices = 0
+
+        self.ext_lm_tc = []
 
         self.MAX_GRID_SIZE = 65
         self.ctrlPoints = [[0 for x in range(self.MAX_GRID_SIZE)]
@@ -271,6 +313,8 @@ class ID3Model:
         material_name = (
             shaders_lump[face.texture].name.decode("latin-1") +
             material_suffix)
+        
+        self.ext_lm_tc.append(face.texture in bsp.lightmap_tc_shaders)
 
         if material_name not in self.material_names:
             self.material_names.append(material_name)
@@ -492,6 +536,78 @@ class ID3Model:
                                    face,
                                    force_nodraw)
             
+    def add_bsp_brush(self, bsp, brush_id, import_settings):
+        bsp_brush = bsp.lumps["brushes"][brush_id]
+        brush_shader = ""
+        planes = []
+
+        if import_settings.preset == "SHADOW_BRUSHES":
+            brush_shader = (
+                bsp.lumps["shaders"]
+                [bsp_brush.texture].name.decode("latin-1"))
+            if brush_shader.startswith("noshader"):
+                return
+            if brush_shader.startswith("models/"):
+                return
+            if brush_shader.startswith("textures/system/"):
+                for side in range(bsp_brush.n_brushsides):
+                    brushside = bsp.lumps["brushsides"][
+                        bsp_brush.brushside + side]
+                    bsp_plane = bsp.lumps["planes"][brushside.plane]
+                    shader = (
+                        bsp.lumps["shaders"]
+                        [brushside.texture].name.decode("latin-1"))
+                    if not (shader.startswith("textures/system/") or \
+                            shader.startswith("noshader") or \
+                            shader.startswith("models/")):
+                        brush_shader = shader
+                        break
+                if brush_shader.startswith("textures/system/"):
+                    return
+
+        for side in range(bsp_brush.n_brushsides):
+            brushside = bsp.lumps["brushsides"][
+                bsp_brush.brushside + side]
+            bsp_plane = bsp.lumps["planes"][brushside.plane]
+
+            if import_settings.preset == "SHADOW_BRUSHES":
+                shader = brush_shader
+            else:
+                shader = (
+                    bsp.lumps["shaders"]
+                    [brushside.texture].name.decode("latin-1"))
+
+            planes.append(Plane(
+                tuple(bsp_plane.normal),
+                bsp_plane.distance,
+                shader))
+
+        points, uvs, faces, mats = parse_brush(planes)
+
+        indices = []
+        for i in range(len(points)):
+            indices.append(len(self.index_mapping))
+            self.index_mapping.append(-2)
+
+        for index, (point, uv) in zip(indices, (zip(points, uvs))):
+            self.index_mapping[index] = self.current_index
+            self.current_index += 1
+            self.positions.add_indexed(point)
+            self.vertex_normals.add_indexed((0.0, 0.0, 0.0))
+            self.uv_layers["UVMap"].add_unindexed(uv)
+
+        for face, material in zip(faces, mats):
+            # add vertices to model
+            self.indices.append(
+                [self.index_mapping[indices[index]] for index in face])
+
+            if material not in self.material_names:
+                self.material_names.append(material)
+
+            self.face_smooth.append(False)
+            self.material_id.append(
+                self.material_names.index(material))
+            
     def add_bsp_bounds_mesh(self, bsp, mins, maxs, material):
 
         min_max_planes = [
@@ -581,66 +697,7 @@ class ID3Model:
 
         for i in range(bsp_model.n_brushes):
             brush_id = first_brush + i
-            bsp_brush = bsp.lumps["brushes"][brush_id]
-            brush_shader = ""
-            planes = []
-
-            if import_settings.preset == "SHADOW_BRUSHES":
-                brush_shader = (
-                    bsp.lumps["shaders"]
-                    [bsp_brush.texture].name.decode("latin-1"))
-                if brush_shader.startswith("noshader"):
-                    continue
-                if brush_shader.startswith("models/"):
-                    continue
-                if brush_shader.startswith("textures/system/"):
-                    continue
-
-            for side in range(bsp_brush.n_brushsides):
-                brushside = bsp.lumps["brushsides"][
-                    bsp_brush.brushside + side]
-                bsp_plane = bsp.lumps["planes"][brushside.plane]
-
-                if import_settings.preset == "SHADOW_BRUSHES":
-                    shader = brush_shader
-                else:
-                    shader = (
-                        bsp.lumps["shaders"]
-                        [brushside.texture].name.decode("latin-1"))
-
-                planes.append(Plane(
-                    tuple(bsp_plane.normal),
-                    bsp_plane.distance,
-                    shader))
-
-            points, uvs, faces, mats = parse_brush(planes)
-
-            indices = []
-            for i in range(len(points)):
-                indices.append(len(self.index_mapping))
-                self.index_mapping.append(-2)
-
-            for index, (point, uv) in zip(indices, (zip(points, uvs))):
-                self.index_mapping[index] = self.current_index
-                self.current_index += 1
-                self.positions.add_indexed(point)
-                self.vertex_normals.add_indexed((0.0, 0.0, 0.0))
-                self.uv_layers["UVMap"].add_unindexed(uv)
-
-            for face, material in zip(faces, mats):
-                # add vertices to model
-                if import_settings.front_culling:
-                    self.indices.append(
-                        [self.index_mapping[indices[index]] for index in face[::-1]])
-                else:
-                    self.indices.append(
-                        [self.index_mapping[indices[index]] for index in face])
-                if material not in self.material_names:
-                    self.material_names.append(material)
-
-                self.face_smooth.append(False)
-                self.material_id.append(
-                    self.material_names.index(material))
+            self.add_bsp_brush(bsp, brush_id, import_settings)
 
         special_imports = ["SHADOW_BRUSHES", "EDITING"]
         if import_settings.preset in special_imports:
@@ -756,3 +813,50 @@ class ID3Model:
                     bsp.internal_lightmap_size,
                     bsp.lightmap_size
                 )
+
+    def pack_vertmap_uvs(self, bsp, import_settings):
+        # Breaks indexed uvs
+        self.uv_layers["LightmapUV"].make_unindexed_list()
+        lightmap_ids = self.vertex_lightmap_id.get_unindexed()
+        current_index = 0
+        for face, ext_lm_tc in zip(self.indices, self.ext_lm_tc):
+            lightmapped = False
+            if len(face) > 4 or ext_lm_tc:
+                current_index += len(face)
+                continue
+            for vert_id, index in enumerate(face):
+                lm_id = lightmap_ids[current_index]
+                if bsp.lightmaps > 1:
+                    lm_id = lightmap_ids[current_index][0]
+
+                if lm_id >= 0:
+                    lightmapped = True
+                    current_index += 1
+                    continue
+
+                self.uv_layers["LightmapUV"].unindexed[current_index] = unwrap_vert_map(
+                    vert_id,
+                    (2048, 2048),
+                    import_settings.current_vert_pack_index
+                )
+
+                current_index += 1
+                if len(face) != 4:
+                    import_settings.current_vert_pack_index += 1
+            if len(face) == 4 and not lightmapped:
+                import_settings.current_vert_pack_index += 6
+
+    def copy_vertmap_uvs_from_diffuse(self, bsp):
+        lightmap_ids = self.vertex_lightmap_id.get_indexed()
+        for face, ext_lm_tc in zip(self.indices, self.ext_lm_tc):
+            if len(face) > 4 or ext_lm_tc:
+                continue
+            for index in face:
+                lm_id = lightmap_ids[index]
+                if bsp.lightmaps > 1:
+                    lm_id = lightmap_ids[index][0]
+
+                if lm_id >= 0:
+                    continue
+
+                self.uv_layers["LightmapUV"].indexed[index] = self.uv_layers["UVMap"].indexed[index]
