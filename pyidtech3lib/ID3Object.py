@@ -1,6 +1,13 @@
 from numpy import array, deg2rad
 from pyidtech3lib.Parsing import *
 
+def is_float(value):
+    try:
+        float(value)
+        return True
+    except Exception:
+        return False
+
 def ImportEntitiesText(entities_string):
     ent = {}
     entities = []
@@ -31,11 +38,15 @@ def ImportEntitiesText(entities_string):
                 value = value.split(" ")
                 # oh man.... Problem in t1_rail
                 try:
-                    value[0] = float(value[0])
-                    value[1] = float(value[1])
-                    value[2] = float(value[2])
+                    if len(value) < 3:
+                        raise Exception("Not enought values for vector input")
+                    value = tuple(map(float, value))
                 except Exception:
-                    value = [float(value[0]), float(value[0]), float(value[0])]
+                    if is_float(value[0]):
+                        value = [float(value[0]), float(value[0]), float(value[0])]
+                    else:
+                        value = [0.0, 0.0, 0.0]
+                        print("Could not parse value for key:", key, value)
             parsing_keys = (
                 "classname",
                 "model",
@@ -45,25 +56,43 @@ def ImportEntitiesText(entities_string):
             )
             if key in parsing_keys:
                 value = value.strip(" \'\"\t\n\r").replace("\\", "/")
+            elif is_float(value):
+                value = float(value)
 
-            # oh man.... Problem in hoth2
-            if (key == "modelscale"):
+            default_one_keys = (
+                "modelscale",
+                "scale",
+                "light"
+            )
+            if (key in default_one_keys):
                 try:
                     value = float(value)
                 except Exception:
-                    value = float(value.split(" ")[0])
+                    try:
+                        value = float(value.split(" ")[0])
+                    except Exception:
+                        value = 1.0
+                        print("Could not parse", key, value)
 
             if (key == "angle"):
                 try:
                     value = float(value)
                 except Exception:
-                    value = float(value.split(" ")[0])
+                    try:
+                        value = float(value.split(" ")[0])
+                    except Exception:
+                        value = 0.0
+                        print("Could not parse angle:", value)
 
             if (key == "spawnflags"):
                 try:
                     value = int(value)
                 except Exception:
-                    value = int(float(value.split(" ")[0]))
+                    try:
+                        value = int(float(value.split(" ")[0]))
+                    except Exception:
+                        value = 0
+                        print("Could not parse spawnflags:", value)
 
             ent[key] = value
 
