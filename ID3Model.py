@@ -458,7 +458,7 @@ class ID3Model:
                 bsp_index_list.append(fixed_bsp_indices[j][i])
 
         force_nodraw = False
-        if import_settings.preset not in ["BRUSHES", "SHADOWBRUSHES"]:
+        if import_settings.preset not in ["BRUSHES", "SHADOW_BRUSHES"]:
             shaders_lump = bsp.lumps["shaders"]
             force_nodraw = shaders_lump[face.texture].flags == 0x00200000
 
