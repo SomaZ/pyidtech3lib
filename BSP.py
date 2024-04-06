@@ -393,8 +393,15 @@ class BSP_READER:
         # ------------------LIGHTGRID IMAGES-------------------- #
         # ------------------------------------------------------ #
 
-        world_mins = self.lumps["models"][0].mins
-        world_maxs = self.lumps["models"][0].maxs
+        world_mins = array(self.lumps["models"][0].mins, dtype='float32')
+        world_maxs = array(self.lumps["models"][0].maxs, dtype='float32')
+
+        self.lightgrid_size = array(self.lightgrid_size, dtype='float32')
+
+        if (self.lightgrid_size[0] == 0.0 or
+            self.lightgrid_size[1] == 0.0 or
+            self.lightgrid_size[2] == 0.0):
+            return images
 
         lightgrid_origin = [self.lightgrid_size[0] *
                             ceil(world_mins[0] / self.lightgrid_size[0]),
@@ -402,22 +409,23 @@ class BSP_READER:
                             ceil(world_mins[1] / self.lightgrid_size[1]),
                             self.lightgrid_size[2] *
                             ceil(world_mins[2] / self.lightgrid_size[2])]
-
-        self.lightgrid_origin = lightgrid_origin
+        self.lightgrid_origin = array(lightgrid_origin, dtype='float32')
 
         maxs = [self.lightgrid_size[0] *
-                int(world_maxs[0] / self.lightgrid_size[0]),
+                floor(world_maxs[0] / self.lightgrid_size[0]),
                 self.lightgrid_size[1] *
-                int(world_maxs[1] / self.lightgrid_size[1]),
+                floor(world_maxs[1] / self.lightgrid_size[1]),
                 self.lightgrid_size[2] *
-                int(world_maxs[2] / self.lightgrid_size[2])]
-
-        lightgrid_dimensions = [(maxs[0] - lightgrid_origin[0]) /
-                                self.lightgrid_size[0] + 1,
-                                (maxs[1] - lightgrid_origin[1]) /
-                                self.lightgrid_size[1] + 1,
-                                (maxs[2] - lightgrid_origin[2]) /
-                                self.lightgrid_size[2] + 1]
+                floor(world_maxs[2] / self.lightgrid_size[2])]
+        
+        maxs = array(maxs, dtype='float32')
+        lightgrid_dimensions = (
+            (maxs - self.lightgrid_origin) / self.lightgrid_size) + array((1.0, 1.0, 1.0))
+        
+        if (lightgrid_dimensions[0] == 0.0 or
+            lightgrid_dimensions[1] == 0.0 or
+            lightgrid_dimensions[2] == 0.0):
+            return images
 
         self.lightgrid_inverse_dim = [1.0 / lightgrid_dimensions[0],
                                       1.0 /
@@ -438,13 +446,16 @@ class BSP_READER:
         d4_pixels = []
         l_pixels = []
 
-        num_elements = int(lightgrid_dimensions[0] *
-                           lightgrid_dimensions[1] *
-                           lightgrid_dimensions[2])
+        num_elements = (int(lightgrid_dimensions[0]) *
+                           int(lightgrid_dimensions[1]) *
+                           int(lightgrid_dimensions[2]))
         if "lightgridarray" in self.lumps:
             num_elements_bsp = len(self.lumps["lightgridarray"])
         else:
             num_elements_bsp = len(self.lumps["lightgrid"])
+
+        if num_elements == 0:
+            return images
 
         if num_elements == num_elements_bsp:
             for pixel in range(num_elements):
