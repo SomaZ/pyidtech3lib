@@ -491,6 +491,41 @@ class ID3Model:
                                    model_indices,
                                    face,
                                    force_nodraw)
+            
+    def add_bsp_bounds_mesh(self, bsp, mins, maxs, material):
+
+        min_max_planes = [
+            Plane([-1.0, 0.0, 0.0], -mins[0], material),
+            Plane([0.0, -1.0, 0.0], -mins[1], material),
+            Plane([0.0, 0.0, -1.0], -mins[2], material),
+            Plane([1.0, 0.0, 0.0],  maxs[0], material),
+            Plane([0.0, 1.0, 0.0],  maxs[1], material),
+            Plane([0.0, 0.0, 1.0],  maxs[2], material)]
+        points, uvs, faces, mats  = parse_brush(min_max_planes)
+
+        indices = []
+        for i in range(len(points)):
+            indices.append(len(self.index_mapping))
+            self.index_mapping.append(-2)
+
+        for index, (point, uv) in zip(indices, (zip(points, uvs))):
+            self.index_mapping[index] = self.current_index
+            self.current_index += 1
+            self.positions.add_indexed(point)
+            self.vertex_normals.add_indexed((0.0, 0.0, 0.0))
+            self.uv_layers["UVMap"].add_unindexed(uv)
+
+        for face, material in zip(faces, mats):
+            # add vertices to model
+            self.indices.append(
+                [self.index_mapping[indices[index]] for index in face])
+
+            if material not in self.material_names:
+                self.material_names.append(material)
+
+            self.face_smooth.append(False)
+            self.material_id.append(
+                self.material_names.index(material))
 
     def add_bsp_model(self, bsp, model_id, import_settings):
 
