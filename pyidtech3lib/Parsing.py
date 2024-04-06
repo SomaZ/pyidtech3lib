@@ -22,7 +22,7 @@ def parse(line):
     try:
         key, value = line.split(' ', 1)
         key = key.strip("\t ")
-        value = value.strip("\t ")
+        value = value.strip("\t ").split("//")[0]
     except Exception:
         key = line
         value = ""
@@ -30,6 +30,8 @@ def parse(line):
 
 
 def guess_name(literal, file_path):
+    if file_path == "":
+        return ""
     split_name = file_path.replace("\\", "/")
     split_name = split_name.split("/" + literal)
     if len(split_name) > 1:
@@ -41,10 +43,14 @@ def guess_name(literal, file_path):
 
 
 def guess_model_name(file_path):
+    if file_path.startswith("models/"):
+        return file_path
     return guess_name("models/", file_path)
 
 
 def guess_map_name(file_path):
+    if file_path.startswith("maps/"):
+        return file_path
     return guess_name("maps/", file_path)
 
 
