@@ -1,4 +1,4 @@
-from math import floor, ceil, pi, sin, cos
+from math import floor
 from pyidtech3lib.ID3Brushes import Plane, parse_brush
 from pyidtech3lib.ImportSettings import Surface_Type
 
