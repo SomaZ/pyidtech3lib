@@ -123,7 +123,8 @@ def read_map_file(byte_array):
                 nested_open = 0
                 if "surfaces" not in current_ent:
                     current_ent["surfaces"] = []
-                current_ent["surfaces"].append(parse_surface_data(obj_info))
+                if import_settings.preset != "ONLY_LIGHTS":
+                    current_ent["surfaces"].append(parse_surface_data(obj_info))
                 obj_info = []
                 continue
 
