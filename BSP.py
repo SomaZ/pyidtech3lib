@@ -12,6 +12,7 @@ from pyidtech3lib.ImportSettings import Vert_lit_handling
 from math import floor, ceil
 from numpy import array, dot, sin, cos, sqrt, pi
 from struct import unpack
+from typing import List, Tuple
 
 
 def normalize(vector):
@@ -216,7 +217,7 @@ class BSP_READER:
                         self.deluxemapping = False
                         break
 
-    def compute_packed_lightmap_size(self) -> list():
+    def compute_packed_lightmap_size(self) -> Tuple[int, int]:
         if not self.lm_packable:
             return self.internal_lightmap_size
 
@@ -240,7 +241,7 @@ class BSP_READER:
                 break
         if self.deluxemapping:
             packed_lightmap_size[1] = packed_lightmap_size[1] // 2
-        return packed_lightmap_size
+        return tuple(map(int, packed_lightmap_size))
     
     def find_shader_based_external_lightmaps(self, VFS):
         materials = []
@@ -282,7 +283,7 @@ class BSP_READER:
             return model
         return None
 
-    def get_bsp_models(self) -> list():
+    def get_bsp_models(self) -> List[MODEL]:
         models = []
         for i in range(len(self.lumps["models"])):
             model = self.get_bsp_model(i)
@@ -291,7 +292,7 @@ class BSP_READER:
 
         return models
     
-    def get_bsp_fogs(self) -> list():
+    def get_bsp_fogs(self) -> List[MODEL]:
         models = []
         for i in range(len(self.lumps["fogs"])):
             current_fog = self.lumps["fogs"][i]
@@ -322,7 +323,7 @@ class BSP_READER:
             deluxe,
             internal=True,
             color_components=3
-            ):
+            ) -> List[float]:
         num_columns = self.lightmap_size[0] / self.internal_lightmap_size[0]
 
         numPixels = self.lightmap_size[0] * \
@@ -366,7 +367,7 @@ class BSP_READER:
 
         return pixels
 
-    def get_bsp_images(self):
+    def get_bsp_images(self) -> List[IMAGE]:
         pack_lightmaps = (
             self.lightmap_size[0] != self.internal_lightmap_size[0] or
             self.lightmap_size[1] != self.internal_lightmap_size[1]
@@ -507,73 +508,77 @@ class BSP_READER:
         if num_elements == 0:
             return images
 
-        if num_elements == num_elements_bsp:
-            for pixel in range(num_elements):
+        try:
+            if num_elements == num_elements_bsp:
+                for pixel in range(num_elements):
 
-                if "lightgridarray" in self.lumps:
-                    index = unpack(
-                        "<H",
-                        self.lumps["lightgridarray"][pixel])[0]
-                else:
-                    index = pixel
+                    if "lightgridarray" in self.lumps:
+                        index = unpack(
+                            "<H",
+                            self.lumps["lightgridarray"][pixel])[0]
+                    else:
+                        index = pixel
 
-                ambient1 = array((0, 0, 0))
-                ambient2 = array((0, 0, 0))
-                ambient3 = array((0, 0, 0))
-                ambient4 = array((0, 0, 0))
-                direct1 = array((0, 0, 0))
-                direct2 = array((0, 0, 0))
-                direct3 = array((0, 0, 0))
-                direct4 = array((0, 0, 0))
-                l_vec = array((0, 0, 0))
+                    ambient1 = array((0, 0, 0))
+                    ambient2 = array((0, 0, 0))
+                    ambient3 = array((0, 0, 0))
+                    ambient4 = array((0, 0, 0))
+                    direct1 = array((0, 0, 0))
+                    direct2 = array((0, 0, 0))
+                    direct3 = array((0, 0, 0))
+                    direct4 = array((0, 0, 0))
+                    l_vec = array((0, 0, 0))
 
-                ambient1 = self.lumps["lightgrid"][index].ambient1
-                direct1 = self.lumps["lightgrid"][index].direct1
-                if self.lightmaps > 1:
-                    ambient2 = self.lumps["lightgrid"][index].ambient2
-                    ambient3 = self.lumps["lightgrid"][index].ambient3
-                    ambient4 = self.lumps["lightgrid"][index].ambient4
-                    direct2 = self.lumps["lightgrid"][index].direct2
-                    direct3 = self.lumps["lightgrid"][index].direct3
-                    direct4 = self.lumps["lightgrid"][index].direct4
+                    ambient1 = self.lumps["lightgrid"][index].ambient1
+                    direct1 = self.lumps["lightgrid"][index].direct1
+                    if self.lightmaps > 1:
+                        ambient2 = self.lumps["lightgrid"][index].ambient2
+                        ambient3 = self.lumps["lightgrid"][index].ambient3
+                        ambient4 = self.lumps["lightgrid"][index].ambient4
+                        direct2 = self.lumps["lightgrid"][index].direct2
+                        direct3 = self.lumps["lightgrid"][index].direct3
+                        direct4 = self.lumps["lightgrid"][index].direct4
 
-                lat = ((self.lumps["lightgrid"][index].lat_long[0]/255.0) *
-                       2.0 * pi)
-                long = ((self.lumps["lightgrid"][index].lat_long[1]/255.0) *
+                    lat = ((self.lumps["lightgrid"][index].lat_long[0]/255.0) *
                         2.0 * pi)
+                    long = ((self.lumps["lightgrid"][index].lat_long[1]/255.0) *
+                            2.0 * pi)
 
-                slat = sin(lat)
-                clat = cos(lat)
-                slong = sin(long)
-                clong = cos(long)
+                    slat = sin(lat)
+                    clat = cos(lat)
+                    slong = sin(long)
+                    clong = cos(long)
 
-                l_vec = normalize(array(
-                    (clat * slong, slat * slong, clong)))
+                    l_vec = normalize(array(
+                        (clat * slong, slat * slong, clong)))
 
-                color_scale = 1.0
-                append_byte_to_color_list(ambient1, a1_pixels, color_scale)
-                append_byte_to_color_list(direct1, d1_pixels, color_scale)
-                if self.lightmaps == 4:
-                    append_byte_to_color_list(ambient2, a2_pixels, color_scale)
-                    append_byte_to_color_list(ambient3, a3_pixels, color_scale)
-                    append_byte_to_color_list(ambient4, a4_pixels, color_scale)
-                    append_byte_to_color_list(direct2, d2_pixels, color_scale)
-                    append_byte_to_color_list(direct3, d3_pixels, color_scale)
-                    append_byte_to_color_list(direct4, d4_pixels, color_scale)
+                    color_scale = 1.0
+                    append_byte_to_color_list(ambient1, a1_pixels, color_scale)
+                    append_byte_to_color_list(direct1, d1_pixels, color_scale)
+                    if self.lightmaps == 4:
+                        append_byte_to_color_list(ambient2, a2_pixels, color_scale)
+                        append_byte_to_color_list(ambient3, a3_pixels, color_scale)
+                        append_byte_to_color_list(ambient4, a4_pixels, color_scale)
+                        append_byte_to_color_list(direct2, d2_pixels, color_scale)
+                        append_byte_to_color_list(direct3, d3_pixels, color_scale)
+                        append_byte_to_color_list(direct4, d4_pixels, color_scale)
 
-                append_byte_to_color_list(l_vec, l_pixels, 255.0)
-        else:
-            a1_pixels = [0.3 for i in range(num_elements*4)]
-            a2_pixels = [0.0 for i in range(num_elements*4)]
-            a3_pixels = [0.0 for i in range(num_elements*4)]
-            a4_pixels = [0.0 for i in range(num_elements*4)]
-            d1_pixels = [0.0 for i in range(num_elements*4)]
-            d2_pixels = [0.0 for i in range(num_elements*4)]
-            d3_pixels = [0.0 for i in range(num_elements*4)]
-            d4_pixels = [0.0 for i in range(num_elements*4)]
-            l_pixels = [0.0 for i in range(num_elements*4)]
-            print("Lightgridarray mismatch!")
-            print(str(num_elements) + " != " + str(num_elements_bsp))
+                    append_byte_to_color_list(l_vec, l_pixels, 255.0)
+            else:
+                a1_pixels = [0.3 for i in range(num_elements*4)]
+                a2_pixels = [0.0 for i in range(num_elements*4)]
+                a3_pixels = [0.0 for i in range(num_elements*4)]
+                a4_pixels = [0.0 for i in range(num_elements*4)]
+                d1_pixels = [0.0 for i in range(num_elements*4)]
+                d2_pixels = [0.0 for i in range(num_elements*4)]
+                d3_pixels = [0.0 for i in range(num_elements*4)]
+                d4_pixels = [0.0 for i in range(num_elements*4)]
+                l_pixels = [0.0 for i in range(num_elements*4)]
+                print("Lightgridarray mismatch!")
+                print(str(num_elements) + " != " + str(num_elements_bsp))
+        except Exception:
+            print("Could not read or create lightgrid images! Maybe the Lightgrid resoultion is to big?")
+            return images
 
         images.append(create_new_image(
             "$lightgrid_ambient1",

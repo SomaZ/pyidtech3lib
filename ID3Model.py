@@ -1,6 +1,6 @@
-from math import floor, ceil, pi, sin, cos
+from math import floor
 from pyidtech3lib.ID3Brushes import Plane, parse_brush
-from pyidtech3lib.ImportSettings import Surface_Type
+from pyidtech3lib.ImportSettings import Surface_Type, Surface_info_storing
 
 
 class Map_Vertex:
@@ -41,34 +41,29 @@ def unwrap_vert_map(vert_id, vertmap_size, current_id):
     current_x = id % (vertmap_size[0] - 1)
     current_y = 2 * floor(id / (vertmap_size[0] - 1))
     
-    eps_u = 0.005
     if even:
-        eps_small = 0.495
-        eps_big = 1.505
         if vert_id == 0:
-            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+            return ((current_x + 0.495) / vertmap_size[0], (current_y + 1.51) / vertmap_size[1])
         elif vert_id == 1:
-            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + eps_small) / vertmap_size[1])
+            return ((current_x + 0.495) / vertmap_size[0], (current_y + 0.495) / vertmap_size[1])
         elif vert_id == 2:
-            return ((current_x + eps_big + eps_u) / vertmap_size[0], (current_y + eps_small) / vertmap_size[1])
+            return ((current_x + 1.51) / vertmap_size[0], (current_y + 0.495) / vertmap_size[1])
         #special case for patch surfaces
         elif vert_id == 3:
-            return ((current_x + eps_big + eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+            return ((current_x + 1.505) / vertmap_size[0], (current_y + 1.505) / vertmap_size[1])
         else:
             return (0.0, 0.0)
     else:
-        eps_small = 0.505
-        eps_big = 1.505
         current_x += 1
         if vert_id == 0:
-            return ((current_x - eps_small - eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+            return ((current_x - 0.51) / vertmap_size[0], (current_y + 1.505) / vertmap_size[1])
         elif vert_id == 1:
-            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + eps_big) / vertmap_size[1])
+            return ((current_x + 0.505) / vertmap_size[0], (current_y + 1.505) / vertmap_size[1])
         elif vert_id == 2:
-            return ((current_x + eps_small + eps_u) / vertmap_size[0], (current_y + 0.49) / vertmap_size[1])
+            return ((current_x + 0.505) / vertmap_size[0], (current_y + 0.49) / vertmap_size[1])
         #special case for patch surfaces
         elif vert_id == 3:
-            return ((current_x - eps_small - eps_u) / vertmap_size[0], (current_y + 0.49) / vertmap_size[1])
+            return ((current_x - 0.505) / vertmap_size[0], (current_y + 0.495) / vertmap_size[1])
         else:
             return (0.0, 0.0)
 
@@ -150,20 +145,31 @@ class ID3Model:
         self.vertex_colors = {}
         self.vertex_groups = {}
         self.vertex_data_layers = {}
+        self.face_data_layers = {}
         self.material_names = []
         self.material_id = []
         self.face_smooth = []
 
-    def init_bsp_face_data(self, bsp):
+    def init_bsp_face_data(self, bsp, import_settings):
         self.vertex_groups["Lightmapped"] = set()
+        self.vertex_groups["Patch mesh"] = set()
+        self.vertex_groups["Malfomed Lightmap TCs"] = set()
         self.vertex_data_layers["BSP_VERT_INDEX"] = (
             self.VertexAttribute(self.indices))
-        self.vertex_data_layers["BSP_SHADER_INDEX"] = (
-            self.VertexAttribute(self.indices))
-        self.vertex_data_layers["BSP_SURFACE_INDEX"] = (
-            self.VertexAttribute(self.indices))
-        self.vertex_data_layers["BSP_FOG_INDEX"] = (
-            self.VertexAttribute(self.indices))
+        if import_settings.surface_info_storing == Surface_info_storing.PER_VERTEX:
+            self.vertex_data_layers["BSP_SHADER_INDEX"] = (
+                self.VertexAttribute(self.indices))
+            self.vertex_data_layers["BSP_SURFACE_INDEX"] = (
+                self.VertexAttribute(self.indices))
+            self.vertex_data_layers["BSP_FOG_INDEX"] = (
+                self.VertexAttribute(self.indices))
+            self.vertex_data_layers["BSP_SURFACE_TYPE"] = (
+                self.VertexAttribute(self.indices))
+        if import_settings.surface_info_storing == Surface_info_storing.PER_TRIANGLE:
+            self.face_data_layers["BSP_SHADER_INDEX"] = []
+            self.face_data_layers["BSP_SURFACE_INDEX"] = []
+            self.face_data_layers["BSP_FOG_INDEX"] = []
+            self.face_data_layers["BSP_SURFACE_TYPE"] = []
         self.vertex_colors["Color"] = (
             self.VertexAttribute(self.indices))
         self.vertex_colors["Alpha"] = (
@@ -194,6 +200,7 @@ class ID3Model:
     def init_bsp_brush_data(self, bsp):
         self.uv_layers["UVMap"] = (
             self.VertexAttribute(self.indices))
+        self.vertex_groups["Patch mesh"] = set()
         self.current_index = 0
         self.index_mapping = [-2 for i in range(len(bsp.lumps["drawverts"]))]
         self.num_bsp_vertices = 0
@@ -207,6 +214,7 @@ class ID3Model:
     def init_map_brush_data(self):
         self.uv_layers["UVMap"] = (
             self.VertexAttribute(self.indices))
+        self.vertex_groups["Patch mesh"] = set()
         self.current_index = 0
         self.index_mapping = []
         self.num_bsp_vertices = 0
@@ -225,7 +233,10 @@ class ID3Model:
         drawverts_lump.append(vert)
         return new_bsp_index
 
-    def add_bsp_vertex_data(self, bsp, bsp_indices, face=None):
+    def add_bsp_vertex_data(self,
+                            bsp,
+                            bsp_indices,
+                            face=None):
         drawverts_lump = bsp.lumps["drawverts"]
 
         model_indices = []
@@ -266,6 +277,9 @@ class ID3Model:
                 if "BSP_FOG_INDEX" in self.vertex_data_layers:
                     self.vertex_data_layers["BSP_FOG_INDEX"].add_indexed(
                         face.effect)
+                if "BSP_SURFACE_TYPE" in self.vertex_data_layers:
+                    self.vertex_data_layers["BSP_SURFACE_TYPE"].add_indexed(
+                        face.type)
 
                 for i in range(2, bsp.lightmaps+1):
                     if i <= 4:
@@ -294,7 +308,8 @@ class ID3Model:
                           bsp,
                           model_indices,
                           face,
-                          force_nodraw=False):
+                          force_nodraw=False,
+                          malformed_face=False):
         shaders_lump = bsp.lumps["shaders"]
         material_suffix = ""
 
@@ -310,6 +325,10 @@ class ID3Model:
             for index in model_indices:
                 self.vertex_groups["Lightmapped"].add(index)
 
+        if "Malfomed Lightmap TCs" in self.vertex_groups and malformed_face:
+            for index in model_indices:
+                self.vertex_groups["Malfomed Lightmap TCs"].add(index)
+
         material_name = (
             shaders_lump[face.texture].name.decode("latin-1") +
             material_suffix)
@@ -320,6 +339,14 @@ class ID3Model:
             self.material_names.append(material_name)
         self.material_id.append(self.material_names.index(material_name))
         self.face_smooth.append(True)
+        if "BSP_SURFACE_TYPE" in self.face_data_layers:
+            self.face_data_layers["BSP_SURFACE_TYPE"].append(face.type)
+        if "BSP_SHADER_INDEX" in self.face_data_layers:
+            self.face_data_layers["BSP_SHADER_INDEX"].append(face.texture)
+        if "BSP_SURFACE_INDEX" in self.face_data_layers:
+            self.face_data_layers["BSP_SURFACE_INDEX"].append(bsp.lumps["surfaces"].index(face))
+        if "BSP_FOG_INDEX" in self.face_data_layers:
+            self.face_data_layers["BSP_FOG_INDEX"].append(face.effect)
 
     def add_bsp_surface(self, bsp, face, import_settings):
         first_index = face.index
@@ -344,6 +371,24 @@ class ID3Model:
                     face.vertex + self.get_bsp_vertex_offset(
                         bsp, index + 1)
                 )
+
+            malformed_face = False
+            
+            if bsp.lightmaps == 4 and "LightmapUV" in self.uv_layers and face.lm_indexes[0] >= 0:
+                tcs = set([
+                    tuple(bsp.lumps["drawverts"][bsp_indices[0]].lm1coord),
+                    tuple(bsp.lumps["drawverts"][bsp_indices[1]].lm1coord),
+                    tuple(bsp.lumps["drawverts"][bsp_indices[2]].lm1coord)])
+                if len(tcs) == 1:
+                    malformed_face = True
+            elif bsp.lightmaps == 1 and "LightmapUV" in self.uv_layers and face.lm_indexes >= 0:
+                tcs = set([
+                    tuple(bsp.lumps["drawverts"][bsp_indices[0]].lm1coord),
+                    tuple(bsp.lumps["drawverts"][bsp_indices[1]].lm1coord),
+                    tuple(bsp.lumps["drawverts"][bsp_indices[2]].lm1coord)])
+                if len(tcs) == 1:
+                    malformed_face = True
+
             self.add_bsp_vertex_data(bsp, bsp_indices, face)
 
             model_indices = (
@@ -351,7 +396,7 @@ class ID3Model:
                 self.index_mapping[bsp_indices[1]],
                 self.index_mapping[bsp_indices[2]]
             )
-            self.add_bsp_face_data(bsp, model_indices, face)
+            self.add_bsp_face_data(bsp, model_indices, face, False, malformed_face)
 
     def subdivide_patch(self,
                         subdivisions,
@@ -536,6 +581,11 @@ class ID3Model:
                                    face,
                                    force_nodraw)
             
+            # meh ugly hack
+            if "Patch mesh" in self.vertex_groups:
+                for index in model_indices:
+                    self.vertex_groups["Patch mesh"].add(index)
+            
     def add_bsp_brush(self, bsp, brush_id, import_settings):
         bsp_brush = bsp.lumps["brushes"][brush_id]
         brush_shader = ""
@@ -585,15 +635,14 @@ class ID3Model:
         points, uvs, faces, mats = parse_brush(planes)
 
         indices = []
-        for i in range(len(points)):
-            indices.append(len(self.index_mapping))
-            self.index_mapping.append(-2)
-
-        for index, (point, uv) in zip(indices, (zip(points, uvs))):
-            self.index_mapping[index] = self.current_index
-            self.current_index += 1
+        for point in points:
             self.positions.add_indexed(point)
             self.vertex_normals.add_indexed((0.0, 0.0, 0.0))
+            indices.append(len(self.index_mapping))
+            self.index_mapping.append(self.current_index)
+            self.current_index += 1
+
+        for uv in uvs:
             self.uv_layers["UVMap"].add_unindexed(uv)
 
         for face, material in zip(faces, mats):
@@ -607,7 +656,7 @@ class ID3Model:
             self.face_smooth.append(False)
             self.material_id.append(
                 self.material_names.index(material))
-            
+
     def add_bsp_bounds_mesh(self, bsp, mins, maxs, material):
 
         min_max_planes = [
@@ -620,15 +669,14 @@ class ID3Model:
         points, uvs, faces, mats  = parse_brush(min_max_planes)
 
         indices = []
-        for i in range(len(points)):
-            indices.append(len(self.index_mapping))
-            self.index_mapping.append(-2)
-
-        for index, (point, uv) in zip(indices, (zip(points, uvs))):
-            self.index_mapping[index] = self.current_index
-            self.current_index += 1
+        for point in points:
             self.positions.add_indexed(point)
             self.vertex_normals.add_indexed((0.0, 0.0, 0.0))
+            indices.append(len(self.index_mapping))
+            self.index_mapping.append(self.current_index)
+            self.current_index += 1
+
+        for uv in uvs:
             self.uv_layers["UVMap"].add_unindexed(uv)
 
         for face, material in zip(faces, mats):
@@ -650,7 +698,7 @@ class ID3Model:
         if model_id < 0:
             return
 
-        self.init_bsp_face_data(bsp)
+        self.init_bsp_face_data(bsp, import_settings)
         bsp_model = bsp.lumps["models"][model_id]
         first_face = bsp_model.face
         bsp_surface_types = (
@@ -748,6 +796,11 @@ class ID3Model:
             self.face_smooth.append(True)
             self.material_id.append(
                 self.material_names.index(mat_name))
+            
+            # meh ugly hack
+            if "Patch mesh" in self.vertex_groups:
+                for index in [self.index_mapping[indices[index]] for index in face]:
+                    self.vertex_groups["Patch mesh"].add(index)
 
     def add_map_entity_brushes(self, entity, material_sizes, import_settings):
         if entity is None:
@@ -771,14 +824,13 @@ class ID3Model:
                 points, uvs, faces, mats = parse_brush(surf.planes, material_sizes)
 
                 indices = []
-                for i in range(len(points)):
-                    indices.append(len(self.index_mapping))
-                    self.index_mapping.append(-2)
-
-                for index, (point, uv) in zip(indices, (zip(points, uvs))):
-                    self.index_mapping[index] = self.current_index
-                    self.current_index += 1
+                for point in points:
                     self.positions.add_indexed(point)
+                    indices.append(len(self.index_mapping))
+                    self.index_mapping.append(self.current_index)
+                    self.current_index += 1
+
+                for uv in uvs:
                     self.uv_layers["UVMap"].add_unindexed(uv)
 
                 for face, material in zip(faces, mats):
