@@ -1,4 +1,4 @@
-from numpy import array, deg2rad
+from pyidtech3lib.ID3Math import array, deg2rad
 from pyidtech3lib.Parsing import *
 
 def is_float(value):

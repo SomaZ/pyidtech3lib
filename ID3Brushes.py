@@ -1,4 +1,4 @@
-from numpy import (cross,
+from pyidtech3lib.ID3Math import (cross,
                    dot,
                    deg2rad,
                    sqrt,

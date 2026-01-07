@@ -1,4 +1,4 @@
-from numpy import array, dot, sqrt
+from pyidtech3lib.ID3Math import array, dot, sqrt
 
 
 def avg_vec2(vec1, vec2):

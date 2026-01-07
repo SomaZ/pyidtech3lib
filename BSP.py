@@ -10,7 +10,7 @@ from pyidtech3lib.ID3Image import ID3Image as IMAGE
 from pyidtech3lib.ID3Shader import get_material_dicts
 from pyidtech3lib.ImportSettings import Vert_lit_handling
 from math import floor, ceil
-from numpy import array, dot, sin, cos, sqrt, pi
+from pyidtech3lib.ID3Math import array, dot, sin, cos, sqrt, pi
 from struct import unpack
 from typing import List, Tuple
 

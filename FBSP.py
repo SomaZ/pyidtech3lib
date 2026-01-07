@@ -1,5 +1,5 @@
 from ctypes import (LittleEndianStructure, c_ubyte)
-from numpy import array
+from pyidtech3lib.ID3Math import array
 from pyidtech3lib.Helpers import normalize, avg_ivec3, avg_vec2, avg_vec3
 from pyidtech3lib.RBSP import BSP_INFO as RBSP
 from pyidtech3lib.RBSP import BSP_VERTEX

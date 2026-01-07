@@ -1,6 +1,6 @@
 from ctypes import (LittleEndianStructure,
                     c_char, c_float, c_int, c_uint, c_short, c_ubyte, sizeof)
-from numpy import array
+from pyidtech3lib.ID3Math import array
 from pyidtech3lib.Helpers import normalize, avg_ivec3, avg_vec2, avg_vec3
 
 

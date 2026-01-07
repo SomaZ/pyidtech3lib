@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 
 import struct
-from numpy import array
+from pyidtech3lib.ID3Math import array
 
 # move file extension from first array to second one
 # when the format is supported
